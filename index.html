@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>First Uploader — 가짜뉴스 정보 출처 분석기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0efe9;
+    --border: #e0ddd4;
+    --border2: #ccc9be;
+    --text: #1a1916;
+    --text2: #6b6860;
+    --text3: #9e9b92;
+    --accent: #1a1916;
+    --green: #0f6e56;
+    --green-bg: #e1f5ee;
+    --blue: #185fa5;
+    --blue-bg: #e6f1fb;
+    --amber: #854f0b;
+    --amber-bg: #faeeda;
+    --red: #a32d2d;
+    --red-bg: #fcebeb;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Noto Sans KR', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* Header */
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono);
+    font-size: 15px; font-weight: 500; letter-spacing: -0.02em;
+  }
+  .header-logo span { opacity: 0.5; }
+  .header-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 3px 8px;
+    border-radius: 4px;
+    opacity: 0.7;
+  }
+
+  /* API key managed server-side via Vercel env */
+
+  /* Main layout */
+  main {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem;
+  }
+
+  .hero { margin-bottom: 2rem; }
+  .hero h1 {
+    font-size: 28px; font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.25;
+    margin-bottom: 8px;
+  }
+  .hero p {
+    font-size: 15px; color: var(--text2);
+    line-height: 1.6;
+  }
+
+  /* Input section */
+  .input-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .input-label {
+    font-size: 11px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text3);
+    margin-bottom: 10px;
+  }
+  textarea {
+    width: 100%;
+    font-family: var(--sans); font-size: 14px;
+    line-height: 1.7;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface2);
+    color: var(--text);
+    resize: none; height: 100px;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { outline: none; border-color: var(--border2); }
+  textarea::placeholder { color: var(--text3); }
+
+  .input-actions {
+    display: flex; gap: 8px; margin-top: 10px; align-items: center;
+  }
+  .btn-analyze {
+    flex: 1; padding: 10px 20px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 8px;
+    font-family: var(--sans); font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-analyze:hover { opacity: 0.85; }
+  .btn-analyze:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-clear {
+    padding: 10px 16px;
+    background: transparent; color: var(--text2);
+    border: 1px solid var(--border); border-radius: 8px;
+    font-family: var(--sans); font-size: 13px;
+    cursor: pointer;
+  }
+  .btn-clear:hover { background: var(--surface2); }
+
+  /* Example chips */
+  .examples {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .ex-label { font-size: 12px; color: var(--text3); align-self: center; margin-right: 4px; }
+  .ex-chip {
+    font-size: 11px; padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 20px; cursor: pointer;
+    color: var(--text2); background: var(--surface);
+    transition: all 0.12s;
+    font-family: var(--sans);
+  }
+  .ex-chip:hover { border-color: var(--border2); color: var(--text); }
+
+  /* Loading */
+  #loading {
+    display: none;
+    text-align: center; padding: 3rem 1rem;
+  }
+  .spinner-wrap { margin-bottom: 1rem; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-step {
+    font-family: var(--mono); font-size: 13px;
+    color: var(--text2); margin-bottom: 6px;
+  }
+  .step-track {
+    display: flex; gap: 6px; justify-content: center; margin-top: 10px;
+  }
+  .step-pip {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--border2); transition: background 0.3s;
+  }
+  .step-pip.on { background: var(--accent); }
+
+  /* Result */
+  #result { display: none; }
+
+  .result-meta {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap; gap: 8px;
+  }
+  .trust-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+  }
+  .trust-pill::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor; opacity: 0.6;
+  }
+  .pill-official { background: var(--green-bg); color: var(--green); }
+  .pill-media    { background: var(--blue-bg);  color: var(--blue); }
+  .pill-community{ background: var(--amber-bg); color: var(--amber); }
+  .pill-unverified{ background: var(--red-bg);  color: var(--red); }
+
+  .result-time {
+    font-family: var(--mono); font-size: 11px; color: var(--text3);
+  }
+
+  .section-label {
+    font-size: 10px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text3); margin-bottom: 10px;
+  }
+
+  /* Origin card */
+  .origin-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .origin-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 8px; gap: 8px;
+  }
+  .origin-platform {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .platform-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+  }
+  .platform-name { font-size: 15px; font-weight: 500; }
+  .origin-when {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text3); white-space: nowrap;
+  }
+  .origin-desc {
+    font-size: 13px; color: var(--text2); line-height: 1.7;
+    margin-bottom: 12px;
+  }
+  .keyword-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .kw {
+    font-family: var(--mono); font-size: 11px;
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px; color: var(--text3);
+    background: var(--surface2);
+  }
+
+  /* Spread bars */
+  .spread-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .bar-row { margin-bottom: 10px; }
+  .bar-labels {
+    display: flex; justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .bar-platform { font-size: 13px; color: var(--text2); }
+  .bar-pct { font-family: var(--mono); font-size: 12px; color: var(--text); font-weight: 500; }
+  .bar-track {
+    height: 6px; background: var(--surface2);
+    border-radius: 3px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 1s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  /* Verdict */
+  .verdict {
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 13px; line-height: 1.75;
+    margin-top: 1rem;
+  }
+  .verdict-official  { background: var(--green-bg); color: #085041; border: 1px solid #9FE1CB; }
+  .verdict-media     { background: var(--blue-bg);  color: #0c447c; border: 1px solid #85B7EB; }
+  .verdict-community { background: var(--amber-bg); color: #633806; border: 1px solid #FAC775; }
+  .verdict-unverified{ background: var(--red-bg);   color: #791f1f; border: 1px solid #F09595; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+
+  /* New analysis button */
+  .btn-new {
+    display: block; width: 100%;
+    padding: 11px; margin-top: 1.5rem;
+    background: transparent; color: var(--text2);
+    border: 1px dashed var(--border2); border-radius: 8px;
+    font-family: var(--sans); font-size: 13px;
+    cursor: pointer; text-align: center;
+    transition: all 0.15s;
+  }
+  .btn-new:hover { background: var(--surface); color: var(--text); }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 2rem 1rem;
+    font-size: 12px; color: var(--text3);
+    font-family: var(--mono);
+  }
+  footer a { color: var(--text2); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    header { padding: 0 1rem; }
+    main { padding: 1.5rem 1rem; }
+    .hero h1 { font-size: 22px; }
+    #apiBanner { flex-direction: column; align-items: flex-start; gap: 8px; }
+    #apiBanner input { max-width: 100%; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-logo">
+    🔍 <strong>First Uploader</strong> <span>/</span> 최초 발원지 추적기
+  </div>
+  <div class="header-badge">v0.1.0 · open source</div>
+</header>
+
+
+
+<main>
+  <div class="hero">
+    <h1>누가 처음 올렸을까요?</h1>
+    <p>카카오톡·SNS·커뮤니티에서 접한 정보의 최초 출처와 신뢰도를 AI로 분석합니다.</p>
+  </div>
+
+  <!-- Input -->
+  <div class="input-card">
+    <div class="input-label">의심되는 정보 입력</div>
+    <textarea id="queryInput" placeholder="뉴스 제목, 카카오톡 메시지, SNS 게시글 등을 그대로 붙여넣으세요..."></textarea>
+    <div class="input-actions">
+      <button class="btn-clear" onclick="clearAll()">지우기</button>
+      <button class="btn-analyze" id="analyzeBtn" onclick="analyze()">출처 분석하기 →</button>
+    </div>
+  </div>
+
+  <!-- Examples -->
+  <div class="examples">
+    <span class="ex-label">예시</span>
+    <span class="ex-chip" onclick="setEx(0)">정부 발표형</span>
+    <span class="ex-chip" onclick="setEx(1)">커뮤니티 루머</span>
+    <span class="ex-chip" onclick="setEx(2)">SNS 괴담</span>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spinner-wrap"><div class="spinner"></div></div>
+    <div class="loading-step" id="loadMsg">키워드 추출 중...</div>
+    <div class="step-track">
+      <div class="step-pip on" id="p0"></div>
+      <div class="step-pip" id="p1"></div>
+      <div class="step-pip" id="p2"></div>
+      <div class="step-pip" id="p3"></div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="result">
+    <div class="result-meta">
+      <span class="trust-pill" id="trustPill"></span>
+      <span class="result-time" id="resultTime"></span>
+    </div>
+
+    <div class="section-label">최초 출처 분석</div>
+    <div class="origin-card">
+      <div class="origin-top">
+        <div class="origin-platform">
+          <div class="platform-dot" id="originDot"></div>
+          <span class="platform-name" id="originName"></span>
+        </div>
+        <span class="origin-when" id="originWhen"></span>
+      </div>
+      <div class="origin-desc" id="originDesc"></div>
+      <div class="keyword-row" id="keywords"></div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="section-label">플랫폼별 확산 추정</div>
+    <div class="spread-card" id="spreadCard"></div>
+
+    <div class="verdict" id="verdict"></div>
+
+    <button class="btn-new" onclick="clearAll()">＋ 새 정보 분석하기</button>
+  </div>
+</main>
+
+<footer>
+  <a href="https://github.com/" target="_blank">GitHub</a> · MIT License ·
+  First Uploader는 AI 추론 기반입니다. 공식 팩트체크를 대체하지 않습니다.
+</footer>
+
+<script>
+const examples = [
+  "기획재정부는 2025년 하반기부터 청년 주택 청약 저축 금리를 기존 2.0%에서 3.1%로 인상한다고 공식 발표했습니다. 만 19세~34세 청년이 대상이며, 월 납입 한도도 50만원으로 상향됩니다.",
+  "요즘 편의점 삼각김밥 실중량 논란 장난 아니다... 포장지엔 100g인데 실제로 재보면 70g대인 것도 있다고 함. 디씨에서 누군가 직접 실험했는데 퍼지고 있는 중",
+  "카카오톡에서 받은 정보: 수돗물에 미세플라스틱이 기준치 200배 검출됐다는 연구 결과가 나왔는데 정부가 쉬쉬하고 있다고 함. 빨리 생수로 바꾸세요"
+];
+
+function setEx(i) { document.getElementById('queryInput').value = examples[i]; }
+
+
+
+function clearAll() {
+  document.getElementById('queryInput').value = '';
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('analyzeBtn').disabled = false;
+}
+
+const steps = ['핵심 키워드 추출 중...', '플랫폼 검색 중...', '발원지 분석 중...', '신뢰도 산정 중...'];
+
+async function analyze() {
+  const q = document.getElementById('queryInput').value.trim();
+  if (!q) { alert('정보를 입력해주세요.'); return; }
+
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('loading').style.display = 'block';
+
+  let s = 0;
+  const iv = setInterval(() => {
+    s = Math.min(s + 1, 3);
+    document.getElementById('loadMsg').textContent = steps[s];
+    for (let i = 0; i < 4; i++)
+      document.getElementById('p' + i).className = 'step-pip' + (i <= s ? ' on' : '');
+  }, 900);
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q })
+    });
+    const d = await res.json();
+    clearInterval(iv);
+    document.getElementById('loading').style.display = 'none';
+
+    if (!res.ok) throw new Error(d.error || '오류');
+    renderResult(d);
+  } catch (e) {
+    clearInterval(iv);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('analyzeBtn').disabled = false;
+    alert('분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+  }
+}
+
+function renderResult(d) {
+  const pillMap = {
+    official: 'pill-official',
+    media: 'pill-media',
+    community: 'pill-community',
+    unverified: 'pill-unverified'
+  };
+  const verdictMap = {
+    official: 'verdict-official',
+    media: 'verdict-media',
+    community: 'verdict-community',
+    unverified: 'verdict-unverified'
+  };
+
+  const pill = document.getElementById('trustPill');
+  pill.textContent = d.trustLabel;
+  pill.className = 'trust-pill ' + (pillMap[d.trustLevel] || 'pill-unverified');
+
+  document.getElementById('resultTime').textContent = new Date().toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' 분석';
+  document.getElementById('originDot').style.background = d.originColor || '#888';
+  document.getElementById('originName').textContent = d.originPlatform;
+  document.getElementById('originWhen').textContent = d.originWhen;
+  document.getElementById('originDesc').textContent = d.originDesc;
+
+  document.getElementById('keywords').innerHTML = d.keywords.map(k => `<span class="kw">#${k}</span>`).join('');
+
+  document.getElementById('spreadCard').innerHTML =
+    '<div class="section-label" style="margin-bottom:12px;">플랫폼별 확산 추정</div>' +
+    d.spread.map(s => `
+      <div class="bar-row">
+        <div class="bar-labels">
+          <span class="bar-platform">${s.platform}</span>
+          <span class="bar-pct">${Math.round(s.pct)}%</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:0%; background:${s.color};" data-pct="${Math.round(s.pct)}"></div>
+        </div>
+      </div>`).join('');
+
+  const v = document.getElementById('verdict');
+  v.textContent = d.verdict;
+  v.className = 'verdict ' + (verdictMap[d.trustLevel] || 'verdict-unverified');
+
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('analyzeBtn').disabled = false;
+
+  setTimeout(() => {
+    document.querySelectorAll('.bar-fill').forEach(el => {
+      el.style.width = el.dataset.pct + '%';
+    });
+  }, 80);
+
+  document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>
